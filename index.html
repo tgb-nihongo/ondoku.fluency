@@ -833,7 +833,7 @@
 
       <div class="score-grid">
         <div class="score-item">
-          <div class="label">発音正確性</div>
+          <div class="label">読み間違い</div>
           <div class="value" style="color:#1a4f8a">${acc}</div>
           <div class="edit-row">
             <span class="edit-label">修正：</span>
@@ -841,7 +841,7 @@
           </div>
         </div>
         <div class="score-item">
-          <div class="label">流暢さ</div>
+          <div class="label">区切り・ポーズ</div>
           <div class="value" style="color:#38a169">${flu}</div>
           <div class="edit-row">
             <span class="edit-label">修正：</span>
@@ -849,7 +849,7 @@
           </div>
         </div>
         <div class="score-item">
-          <div class="label">完全性</div>
+          <div class="label">読み飛ばし</div>
           <div class="value" style="color:#d69e2e">${com}</div>
           <div class="edit-row">
             <span class="edit-label">修正：</span>
@@ -858,7 +858,7 @@
         </div>
         ${prosody != null ? `
         <div class="score-item">
-          <div class="label">韻律・イントネーション</div>
+          <div class="label">イントネーション</div>
           <div class="value" style="color:#805ad5">${prosody}</div>
           <div class="edit-row">
             <span class="edit-label">修正：</span>
@@ -868,22 +868,22 @@
       </div>
 
       <div class="score-bar-wrap">
-        <div class="score-bar-label"><span>発音正確性</span><span id="bar-acc-${safeId}">${acc}</span></div>
+        <div class="score-bar-label"><span>読み間違い</span><span id="bar-acc-${safeId}">${acc}</span></div>
         <div class="score-bar-bg"><div class="score-bar-fill fill-accuracy" id="fill-acc-${safeId}" style="width:${acc}%"></div></div>
-        <div class="score-bar-label"><span>流暢さ</span><span id="bar-flu-${safeId}">${flu}</span></div>
+        <div class="score-bar-label"><span>区切り・ポーズ</span><span id="bar-flu-${safeId}">${flu}</span></div>
         <div class="score-bar-bg"><div class="score-bar-fill fill-fluency" id="fill-flu-${safeId}" style="width:${flu}%"></div></div>
-        <div class="score-bar-label"><span>完全性（読み飛ばしなし）</span><span id="bar-com-${safeId}">${com}</span></div>
+        <div class="score-bar-label"><span>読み飛ばし</span><span id="bar-com-${safeId}">${com}</span></div>
         <div class="score-bar-bg"><div class="score-bar-fill fill-completeness" id="fill-com-${safeId}" style="width:${com}%"></div></div>
         ${prosody != null ? `
-        <div class="score-bar-label"><span>韻律・イントネーション</span><span id="bar-pro-${safeId}">${prosody}</span></div>
+        <div class="score-bar-label"><span>イントネーション</span><span id="bar-pro-${safeId}">${prosody}</span></div>
         <div class="score-bar-bg"><div class="score-bar-fill fill-prosody" id="fill-pro-${safeId}" style="width:${prosody}%"></div></div>` : ''}
       </div>
       <div class="word-list">
         <div class="tab-bar" id="tabs-${safeId}">
-          <button class="tab-btn active" onclick="switchTab(this,'accuracy','${safeId}')">発音正確性</button>
-          <button class="tab-btn" onclick="switchTab(this,'fluency','${safeId}')">流暢さ</button>
-          <button class="tab-btn" onclick="switchTab(this,'completeness','${safeId}')">完全性</button>
-          ${prosody != null ? `<button class="tab-btn" onclick="switchTab(this,'prosody','${safeId}')">韻律・イントネーション</button>` : ''}
+          <button class="tab-btn active" onclick="switchTab(this,'accuracy','${safeId}')">読み間違い</button>
+          <button class="tab-btn" onclick="switchTab(this,'fluency','${safeId}')">区切り・ポーズ</button>
+          <button class="tab-btn" onclick="switchTab(this,'completeness','${safeId}')">読み飛ばし</button>
+          ${prosody != null ? `<button class="tab-btn" onclick="switchTab(this,'prosody','${safeId}')">イントネーション</button>` : ''}
           <button class="tab-btn" onclick="switchTab(this,'all','${safeId}')">全単語</button>
         </div>
 
@@ -906,15 +906,23 @@
         <!-- 流暢さタブ -->
         <div class="tab-content" id="tab-fluency-${safeId}" style="display:none">
           <p style="font-size:13px;color:#4a5568;margin-bottom:10px;padding:10px;background:#f7faff;border-radius:8px">
-            流暢さスコア：<strong>${flu}</strong>／100　―　区切り位置や読み直しがどれだけ自然かを示します。
+            区切り・ポーズスコア：<strong>${flu}</strong>／100　―　区切り位置やポーズの取り方がどれだけ自然かを示します。
             ${flu >= 80 ? '<br><span style="color:#38a169;font-weight:600">✅ 流暢に読めています</span>' : flu >= 60 ? '<br><span style="color:#d69e2e;font-weight:600">△ 区切りや読み直しにやや改善の余地があります</span>' : '<br><span style="color:#e53e3e;font-weight:600">❌ 区切り位置や読み直しの改善が必要です</span>'}
           </p>
+          ${(() => {
+            const omitW = words.filter(w => getWordError(w) === 'Omission');
+            if (omitW.length === 0) return '<p style="color:#38a169;font-weight:600">✅ 読み飛ばしはありませんでした</p>';
+            return `<p style="font-size:13px;color:#c53030;font-weight:600;margin-bottom:8px">⬜ 読み飛ばした語</p>
+            <table class="word-table"><thead><tr><th>語</th><th>判定</th></tr></thead><tbody>
+              ${omitW.map(w => `<tr><td><span style="background:#fefcbf;color:#7b6c00;padding:2px 10px;border-radius:99px;font-weight:600">${getWordText(w)}</span></td><td>⬜ 読み飛ばし</td></tr>`).join('')}
+            </tbody></table>`;
+          })()}
         </div>
 
         <!-- 完全性タブ -->
         <div class="tab-content" id="tab-completeness-${safeId}" style="display:none">
           <p style="font-size:13px;color:#4a5568;margin-bottom:10px;padding:10px;background:#f7faff;border-radius:8px">
-            完全性スコア：<strong>${com}</strong>／100　―　テキストの語を読み飛ばさずに読めているかを示します。
+            読み飛ばしスコア：<strong>${com}</strong>／100　―　テキストの語を読み飛ばさずに読めているかを示します。
           </p>
           ${(() => {
             const omitW = words.filter(w => getWordError(w) === 'Omission');
@@ -929,7 +937,7 @@
         ${prosody != null ? `
         <div class="tab-content" id="tab-prosody-${safeId}" style="display:none">
           <p style="font-size:13px;color:#4a5568;padding:10px;background:#f7faff;border-radius:8px">
-            韻律・イントネーションスコア：<strong>${prosody}</strong>／100
+            イントネーションスコア：<strong>${prosody}</strong>／100
             ${prosody >= 80 ? '<br><span style="color:#38a169;font-weight:600">✅ 全体的に自然なイントネーションで読めています</span>' : prosody >= 60 ? '<br><span style="color:#d69e2e;font-weight:600">△ イントネーションにやや改善の余地があります</span>' : '<br><span style="color:#e53e3e;font-weight:600">❌ イントネーションの改善が必要です</span>'}
           </p>
         </div>` : ''}
@@ -1068,10 +1076,10 @@ ${allHtml}
   <div class="section">
     <div class="section-title">📊 項目別スコア</div>
     <div class="score-grid">
-      <div class="score-box"><div class="label">発音正確性</div><div class="val" style="color:${scoreColor(acc)}">${acc}</div></div>
-      <div class="score-box"><div class="label">流暢さ</div><div class="val" style="color:${scoreColor(flu)}">${flu}</div></div>
-      <div class="score-box"><div class="label">完全性</div><div class="val" style="color:${scoreColor(com)}">${com}</div></div>
-      ${prosody != null ? `<div class="score-box"><div class="label">韻律・イントネーション</div><div class="val" style="color:${scoreColor(prosody)}">${prosody}</div></div>` : ''}
+      <div class="score-box"><div class="label">読み間違い</div><div class="val" style="color:${scoreColor(acc)}">${acc}</div></div>
+      <div class="score-box"><div class="label">区切り・ポーズ</div><div class="val" style="color:${scoreColor(flu)}">${flu}</div></div>
+      <div class="score-box"><div class="label">読み飛ばし</div><div class="val" style="color:${scoreColor(com)}">${com}</div></div>
+      ${prosody != null ? `<div class="score-box"><div class="label">イントネーション</div><div class="val" style="color:${scoreColor(prosody)}">${prosody}</div></div>` : ''}
     </div>
   </div>
 
@@ -1141,7 +1149,7 @@ ${allHtml}
 
   function exportCSV() {
     if (allResults.length === 0) return;
-    const rows = [['ファイル名', '総合点', '発音正確性', '流暢さ', '完全性', '韻律・イントネーション', '認識テキスト', 'エラー']];
+    const rows = [['ファイル名', '総合点', '読み間違い', '区切り・ポーズ', '読み飛ばし', 'イントネーション', '認識テキスト', 'エラー']];
     for (const r of allResults) {
       if (r.error) {
         rows.push([r.name, '', '', '', '', '', '', r.error]);
