@@ -887,11 +887,11 @@
           <button class="tab-btn" onclick="switchTab(this,'all','${safeId}')">全単語</button>
         </div>
 
-        <!-- 発音正確性タブ -->
+        <!-- 読み間違いタブ -->
         <div class="tab-content" id="tab-accuracy-${safeId}">
           ${(() => {
             const accWords = words.filter(w => { const s = getWordScore(w); const e = getWordError(w); return e !== 'Omission' && e !== 'Insertion' && s !== null && s < 80; });
-            if (accWords.length === 0) return '<p style="color:#38a169;font-weight:600;padding:12px 0">✅ 発音の問題はありませんでした</p>';
+            if (accWords.length === 0) return '<p style="color:#38a169;font-weight:600;padding:12px 0">✅ 読み間違いはありませんでした</p>';
             return `<table class="word-table"><thead><tr><th>語</th><th>発音スコア</th><th>判定</th></tr></thead><tbody>
               ${accWords.map(w => {
                 const s = getWordScore(w); const t = getWordText(w);
@@ -903,11 +903,11 @@
           })()}
         </div>
 
-        <!-- 流暢さタブ -->
+        <!-- 区切り・ポーズタブ -->
         <div class="tab-content" id="tab-fluency-${safeId}" style="display:none">
           <p style="font-size:13px;color:#4a5568;margin-bottom:10px;padding:10px;background:#f7faff;border-radius:8px">
             区切り・ポーズスコア：<strong>${flu}</strong>／100　―　区切り位置やポーズの取り方がどれだけ自然かを示します。
-            ${flu >= 80 ? '<br><span style="color:#38a169;font-weight:600">✅ 流暢に読めています</span>' : flu >= 60 ? '<br><span style="color:#d69e2e;font-weight:600">△ 区切りや読み直しにやや改善の余地があります</span>' : '<br><span style="color:#e53e3e;font-weight:600">❌ 区切り位置や読み直しの改善が必要です</span>'}
+            ${flu >= 80 ? '<br><span style="color:#38a169;font-weight:600">✅ 区切り・ポーズが自然です</span>' : flu >= 60 ? '<br><span style="color:#d69e2e;font-weight:600">△ 区切り・ポーズにやや改善の余地があります</span>' : '<br><span style="color:#e53e3e;font-weight:600">❌ 区切り・ポーズの改善が必要です</span>'}
           </p>
           ${(() => {
             const omitW = words.filter(w => getWordError(w) === 'Omission');
@@ -919,7 +919,7 @@
           })()}
         </div>
 
-        <!-- 完全性タブ -->
+        <!-- 読み飛ばしタブ -->
         <div class="tab-content" id="tab-completeness-${safeId}" style="display:none">
           <p style="font-size:13px;color:#4a5568;margin-bottom:10px;padding:10px;background:#f7faff;border-radius:8px">
             読み飛ばしスコア：<strong>${com}</strong>／100　―　テキストの語を読み飛ばさずに読めているかを示します。
@@ -933,7 +933,7 @@
           })()}
         </div>
 
-        <!-- 韻律タブ -->
+        <!-- イントネーションタブ -->
         ${prosody != null ? `
         <div class="tab-content" id="tab-prosody-${safeId}" style="display:none">
           <p style="font-size:13px;color:#4a5568;padding:10px;background:#f7faff;border-radius:8px">
@@ -1105,7 +1105,7 @@ ${allHtml}
         }).join('')}
       </tbody>
     </table>
-  </div>` : `<div class="section"><div class="section-title">発音正確性</div><p style="color:#276749;font-weight:600">✅ 発音の問題はありませんでした</p></div>`}
+  </div>` : `<div class="section"><div class="section-title">読み間違い</div><p style="color:#276749;font-weight:600">✅ 読み間違いはありませんでした</p></div>`}
 
   ${omitW.length > 0 ? `
   <div class="section">
@@ -1132,11 +1132,11 @@ ${allHtml}
   <div class="section">
     <div class="section-title">💬 総合コメント</div>
     <div class="comment-box">
-      ${pro >= 85 ? '全体的に非常によく読めています。発音・流暢さともに高いレベルです。' :
+      ${pro >= 85 ? '全体的に非常によく読めています。発音・区切りともに高いレベルです。' :
         pro >= 70 ? '概ねよく読めています。いくつかの語の発音をさらに練習するとより自然になります。' :
         pro >= 55 ? '基本的な読みはできていますが、発音や読み飛ばしに改善の余地があります。問題のある語を重点的に練習しましょう。' :
         '発音や読み飛ばしが多く見られます。テキストをゆっくり確認しながら繰り返し練習しましょう。'}
-      ${flu < 70 ? '<br>流暢さのスコアが低めです。不必要な間や詰まりを減らすよう意識しましょう。' : ''}
+      ${flu < 70 ? '<br>区切り・ポーズのスコアが低めです。不必要な間や詰まりを減らすよう意識しましょう。' : ''}
       ${com < 80 ? '<br>読み飛ばしが見られます。テキスト全体をしっかり確認しながら読む練習をしましょう。' : ''}
     </div>
   </div>
