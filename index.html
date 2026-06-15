@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>音読採点システム（流暢さ込み）</title>
+<script src="https://cdn.jsdelivr.net/npm/microsoft-cognitiveservices-speech-sdk@latest/distrib/browser/microsoft.cognitiveservices.speech.sdk.bundle.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+    background: #f0f4f8;
+    color: #1a2533;
+    min-height: 100vh;
+  }
+
+  header {
+    background: #1a4f8a;
+    color: white;
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  header h1 { font-size: 22px; font-weight: 700; letter-spacing: 0.05em; }
+  header span { font-size: 13px; opacity: 0.7; margin-left: auto; }
+
+  .container { max-width: 900px; margin: 0 auto; padding: 32px 20px; }
+
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  }
+
+  .card h2 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1a4f8a;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e8eef5;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .step-badge {
+    background: #1a4f8a;
+    color: white;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  label { font-size: 14px; color: #4a5568; display: block; margin-bottom: 6px; }
+
+  input[type="text"], input[type="password"], textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid #cbd5e0;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+  input[type="text"]:focus, input[type="password"]:focus, textarea:focus {
+    border-color: #1a4f8a;
+  }
+
+  textarea { min-height: 120px; resize: vertical; line-height: 1.8; }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+
+  .file-drop {
+    border: 2px dashed #90afd4;
+    border-radius: 10px;
+    padding: 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #f7faff;
+  }
+  .file-drop:hover, .file-drop.dragover {
+    background: #e8f0fb;
+    border-color: #1a4f8a;
+  }
+  .file-drop input { display: none; }
+  .file-drop .icon { font-size: 36px; margin-bottom: 8px; }
+  .file-drop p { font-size: 14px; color: #4a5568; }
+  .file-drop small { font-size: 12px; color: #90a0b7; }
+
+  .file-list { margin-top: 16px; }
+  .file-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #f7faff;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+  .file-item .fname { flex: 1; font-weight: 500; }
+  .file-item .fsize { color: #90a0b7; font-size: 12px; }
+  .file-item .remove {
+    cursor: pointer;
+    color: #e53e3e;
+    font-size: 18px;
+    line-height: 1;
+    background: none;
+    border: none;
+    padding: 0 4px;
+  }
+  .file-item .status { font-size: 12px; color: #90a0b7; min-width: 60px; text-align: right; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 28px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .btn-primary { background: #1a4f8a; color: white; }
+  .btn-primary:hover:not(:disabled) { background: #153d6e; }
+  .btn-primary:disabled { background: #90afd4; cursor: not-allowed; }
+  .btn-secondary { background: #e8eef5; color: #1a4f8a; }
+  .btn-secondary:hover { background: #d0dcea; }
+
+  .btn-row { display: flex; gap: 12px; justify-content: center; margin-top: 8px; }
+
+  .progress-bar-wrap {
+    background: #e8eef5;
+    border-radius: 99px;
+    height: 8px;
+    margin: 16px 0 8px;
+    overflow: hidden;
+    display: none;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #1a4f8a, #4a90d9);
+    border-radius: 99px;
+    transition: width 0.4s ease;
+    width: 0%;
+  }
+  .progress-label { font-size: 13px; color: #4a5568; text-align: center; }
+
+  /* Results */
+  .results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .results-header h2 { font-size: 18px; font-weight: 700; color: #1a2533; }
+
+  .result-card {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    border-left: 4px solid #1a4f8a;
+  }
+  .result-card.error { border-left-color: #e53e3e; }
+
+  .result-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .result-name { font-weight: 700; font-size: 15px; }
+  .result-score {
+    font-size: 28px;
+    font-weight: 800;
+    color: #1a4f8a;
+    line-height: 1;
+  }
+  .result-score span { font-size: 14px; font-weight: 500; color: #718096; }
+
+  .score-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  @media (max-width: 500px) { .score-grid { grid-template-columns: 1fr 1fr; } }
+
+  .score-item {
+    background: #f7faff;
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+  }
+  .score-item .label { font-size: 11px; color: #718096; margin-bottom: 4px; }
+  .score-item .value { font-size: 20px; font-weight: 700; color: #1a4f8a; }
+
+  .score-bar-wrap { margin-top: 12px; }
+  .score-bar-label { font-size: 12px; color: #4a5568; margin-bottom: 3px; display: flex; justify-content: space-between; }
+  .score-bar-bg { background: #e8eef5; border-radius: 99px; height: 6px; overflow: hidden; margin-bottom: 8px; }
+  .score-bar-fill { height: 100%; border-radius: 99px; transition: width 0.6s ease; }
+  .fill-accuracy { background: #1a4f8a; }
+  .fill-fluency { background: #38a169; }
+  .fill-completeness { background: #d69e2e; }
+  .fill-prosody { background: #805ad5; }
+
+  .word-list { margin-top: 14px; padding-top: 12px; border-top: 1px solid #e8eef5; }
+  .word-list p { font-size: 13px; color: #718096; margin-bottom: 8px; }
+  .words { display: flex; flex-wrap: wrap; gap: 6px; }
+  .word-tag {
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .word-tag.good { background: #c6f6d5; color: #276749; }
+  .word-tag.bad { background: #fed7d7; color: #9b2c2c; }
+  .word-tag.miss { background: #fefcbf; color: #7b6c00; }
+  .word-tag.insert { background: #e9d8fd; color: #553c9a; }
+
+  .word-detail-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 4px 10px;
+    border-radius: 99px;
+    font-size: 13px;
+    font-weight: 500;
+    margin: 2px;
+  }
+
+  .word-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+  .word-table thead tr {
+    background: #edf2f7;
+  }
+  .word-table th {
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 700;
+    color: #2d3748;
+    border-bottom: 2px solid #cbd5e0;
+    font-size: 13px;
+  }
+  .word-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #e8eef5;
+    vertical-align: middle;
+  }
+  .word-table tr:last-child td { border-bottom: none; }
+  .word-table tr:hover td { background: #f7faff; }
+
+  .tab-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+    border-bottom: 2px solid #e8eef5;
+    padding-bottom: 10px;
+  }
+  .tab-btn {
+    padding: 6px 14px;
+    border-radius: 6px 6px 0 0;
+    border: 1.5px solid #cbd5e0;
+    border-bottom: none;
+    background: #f7faff;
+    color: #4a5568;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .tab-btn.active {
+    background: #1a4f8a;
+    color: white;
+    border-color: #1a4f8a;
+  }
+  .tab-btn:hover:not(.active) {
+    background: #e8eef5;
+  }
+
+  .edit-notice {
+    background: #fffbeb;
+    border: 1px solid #f6e05e;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #7b6c00;
+    margin-bottom: 14px;
+  }
+  .edit-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .edit-label { font-size: 11px; color: #718096; }
+  .score-input {
+    width: 60px;
+    padding: 3px 6px;
+    border: 1.5px solid #cbd5e0;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    color: #1a4f8a;
+    outline: none;
+  }
+  .score-input:focus { border-color: #1a4f8a; }
+  .btn-recalc {
+    padding: 4px 12px;
+    background: #6b46c1;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .btn-recalc:hover { background: #553c9a; }
+
+  .error-msg { color: #e53e3e; font-size: 14px; }
+
+  .info-box {
+    background: #ebf4ff;
+    border: 1px solid #bee3f8;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #2c5282;
+    margin-bottom: 16px;
+    line-height: 1.7;
+  }
+
+  #results-section { display: none; }
+
+  .toggle-key { font-size: 12px; color: #718096; cursor: pointer; text-decoration: underline; margin-left: 8px; }
+
+  .export-btn {
+    background: #38a169;
+    color: white;
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .export-btn:hover { background: #2f855a; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>🎙️</div>
+  <h1>音読採点システム</h1>
+  <span>Azure Pronunciation Assessment</span>
+</header>
+
+<div class="container">
+
+  <!-- Step 1: API設定 -->
+  <div class="card">
+    <h2><span class="step-badge">1</span> Azure APIの設定</h2>
+    <div class="info-box">
+      AzureポータルのSpeech Serviceから「キー1」と「場所/地域」をコピーして入力してください。<br>
+      入力した情報はこのブラウザ内だけで使用し、外部には送信されません。
+    </div>
+    <div class="row">
+      <div>
+        <label>APIキー（キー1）</label>
+        <input type="password" id="apiKey" placeholder="32文字のキーを入力">
+        <span class="toggle-key" onclick="toggleKey()">表示/非表示</span>
+      </div>
+      <div>
+        <label>リージョン</label>
+        <input type="text" id="region" value="japaneast" placeholder="japaneast">
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: 正解テキスト -->
+  <div class="card">
+    <h2><span class="step-badge">2</span> 正解テキストの入力</h2>
+    <label>学生が音読した文章をそのまま貼り付けてください</label>
+    <textarea id="refText" placeholder="例：&#10;日本語の音読試験のテキストをここに入力してください。&#10;句読点もそのまま入力してください。"></textarea>
+  </div>
+
+  <!-- Step 3: 音声アップロード -->
+  <div class="card">
+    <h2><span class="step-badge">3</span> 学生の音声ファイルをアップロード</h2>
+    <p style="font-size:13px;color:#718096;margin-bottom:14px;">mp4・mp3・wav・m4a対応。複数ファイルを一度に選択できます。ファイル名が学生名として使われます。</p>
+    <div class="file-drop" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <input type="file" id="fileInput" multiple accept="audio/*,video/mp4,.mp4,.m4a">
+      <div class="icon">📂</div>
+      <p>クリックまたはドラッグ＆ドロップでファイルを選択</p>
+      <small>mp4 / mp3 / wav / m4a 対応</small>
+    </div>
+    <div class="file-list" id="fileList"></div>
+  </div>
+
+  <!-- 採点ボタン -->
+  <div class="btn-row">
+    <button class="btn btn-primary" id="startBtn" onclick="startScoring()" disabled>
+      ▶ 採点を開始する
+    </button>
+    <button class="btn btn-secondary" onclick="resetAll()">リセット</button>
+  </div>
+
+  <div class="progress-bar-wrap" id="progressWrap">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+  <div class="progress-label" id="progressLabel"></div>
+
+  <!-- 結果 -->
+  <div id="results-section">
+    <div class="results-header">
+      <h2>📊 採点結果</h2>
+      <div style="display:flex;gap:8px">
+        <button class="export-btn" onclick="exportAllPDF()" style="background:#6b46c1">📄 PDF一括生成</button>
+        <button class="export-btn" onclick="exportCSV()">CSV保存</button>
+      </div>
+    </div>
+    <div id="resultsList"></div>
+  </div>
+
+</div>
+
+<script>
+  let files = [];
+
+  // ファイル選択
+  document.getElementById('fileInput').addEventListener('change', e => addFiles(e.target.files));
+
+  const dropZone = document.getElementById('dropZone');
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    addFiles(e.dataTransfer.files);
+  });
+
+  function addFiles(newFiles) {
+    for (const f of newFiles) files.push(f);
+    renderFileList();
+    checkReady();
+  }
+
+  function removeFile(i) {
+    files.splice(i, 1);
+    renderFileList();
+    checkReady();
+  }
+
+  function renderFileList() {
+    const list = document.getElementById('fileList');
+    if (files.length === 0) { list.innerHTML = ''; return; }
+    list.innerHTML = files.map((f, i) => `
+      <div class="file-item" id="file-item-${i}">
+        <span>🎵</span>
+        <span class="fname">${f.name}</span>
+        <span class="fsize">${(f.size/1024/1024).toFixed(1)}MB</span>
+        <button class="remove" onclick="removeFile(${i})">×</button>
+        <span class="status" id="status-${i}">待機中</span>
+      </div>
+    `).join('');
+  }
+
+  function checkReady() {
+    const key = document.getElementById('apiKey').value.trim();
+    const text = document.getElementById('refText').value.trim();
+    document.getElementById('startBtn').disabled = !(key && text && files.length > 0);
+  }
+
+  document.getElementById('apiKey').addEventListener('input', checkReady);
+  document.getElementById('refText').addEventListener('input', checkReady);
+
+  function toggleKey() {
+    const el = document.getElementById('apiKey');
+    el.type = el.type === 'password' ? 'text' : 'password';
+  }
+
+  // 音声をwavに変換（16kHz・モノラル）
+  // 音声をwavに変換（16kHz・モノラル）、開始秒数オフセット指定可能
+  async function toWav(file, startSec = 0) {
+    const arrayBuffer = await file.arrayBuffer();
+    const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
+    let decoded;
+    try {
+      decoded = await tmpCtx.decodeAudioData(arrayBuffer);
+    } finally {
+      tmpCtx.close();
+    }
+    const targetSampleRate = 16000;
+    const startFrame = Math.floor(startSec * decoded.sampleRate);
+    const totalFrames = Math.max(1, decoded.length - startFrame);
+    const numFrames = Math.ceil(totalFrames * (targetSampleRate / decoded.sampleRate));
+    const offCtx = new OfflineAudioContext(1, numFrames, targetSampleRate);
+    const source = offCtx.createBufferSource();
+    source.buffer = decoded;
+    source.connect(offCtx.destination);
+    source.start(0, startSec);
+    const rendered = await offCtx.startRendering();
+    return audioBufferToWav(rendered);
+  }
+
+  // 音声全体を文字起こしして正解テキスト最初の語の開始時刻（秒）を返す
+  async function detectStartOffset(wavBlob, refText, apiKey, region) {
+    return new Promise((resolve) => {
+      const SpeechSDK = window.SpeechSDK;
+      const speechConfig = SpeechSDK.SpeechConfig.fromSubscription(apiKey, region);
+      speechConfig.speechRecognitionLanguage = 'ja-JP';
+
+      wavBlob.arrayBuffer().then(buffer => {
+        const pushStream = SpeechSDK.AudioInputStream.createPushStream();
+        pushStream.write(buffer);
+        pushStream.close();
+
+        const audioConfig = SpeechSDK.AudioConfig.fromStreamInput(pushStream);
+        const recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
+
+        recognizer.recognizeOnceAsync(result => {
+          recognizer.close();
+          try {
+            const json = JSON.parse(result.json ?? '{}');
+            const words = json?.NBest?.[0]?.Words ?? [];
+            const firstChar = refText.replace(/\s/g,'')[0];
+            const match = words.find(w => (w.Word ?? '').includes(firstChar));
+            if (match && match.Offset != null) {
+              const sec = Math.max(0, (match.Offset / 10000000) - 0.3);
+              console.log('開始オフセット: ' + sec.toFixed(2) + '秒 (語: ' + match.Word + ')');
+              resolve(sec);
+            } else {
+              console.log('開始語が見つからず、0秒から採点');
+              resolve(0);
+            }
+          } catch(e) {
+            console.log('オフセット検出エラー:', e);
+            resolve(0);
+          }
+        }, () => resolve(0));
+      });
+    });
+  }
+
+  function audioBufferToWav(buffer) {
+    const sampleRate = buffer.sampleRate;
+    const samples = buffer.getChannelData(0);
+    const pcm = new Int16Array(samples.length);
+    for (let i = 0; i < samples.length; i++) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    const wavBuffer = new ArrayBuffer(44 + pcm.byteLength);
+    const view = new DataView(wavBuffer);
+    const writeStr = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+    writeStr(0, 'RIFF');
+    view.setUint32(4, 36 + pcm.byteLength, true);
+    writeStr(8, 'WAVE');
+    writeStr(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);   // PCM
+    view.setUint16(22, 1, true);   // mono
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeStr(36, 'data');
+    view.setUint32(40, pcm.byteLength, true);
+    new Int16Array(wavBuffer, 44).set(pcm);
+    return new Blob([wavBuffer], { type: 'audio/wav' });
+  }
+
+  async function scoreSingle(wavBlob, refText, apiKey, region) {
+    return new Promise((resolve, reject) => {
+      const SpeechSDK = window.SpeechSDK;
+      if (!SpeechSDK) { reject(new Error('Speech SDKが読み込めませんでした')); return; }
+
+      const speechConfig = SpeechSDK.SpeechConfig.fromSubscription(apiKey, region);
+      speechConfig.speechRecognitionLanguage = 'ja-JP';
+
+      const pronunciationAssessmentConfig = new SpeechSDK.PronunciationAssessmentConfig(
+        refText,
+        SpeechSDK.PronunciationAssessmentGradingSystem.HundredMark,
+        SpeechSDK.PronunciationAssessmentGranularity.Word,
+        true
+      );
+      pronunciationAssessmentConfig.enableProsodyAssessment = true;
+
+      // WAV BlobをArrayBufferに変換してPushAudioInputStreamで送る
+      wavBlob.arrayBuffer().then(buffer => {
+        const pushStream = SpeechSDK.AudioInputStream.createPushStream();
+        pushStream.write(buffer);
+        pushStream.close();
+
+        const audioConfig = SpeechSDK.AudioConfig.fromStreamInput(pushStream);
+        const recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
+        pronunciationAssessmentConfig.applyTo(recognizer);
+
+        recognizer.recognizeOnceAsync(result => {
+          console.log('SDK Result:', result);
+          if (result.reason === SpeechSDK.ResultReason.RecognizedSpeech ||
+              result.reason === SpeechSDK.ResultReason.NoMatch) {
+            const paResult = SpeechSDK.PronunciationAssessmentResult.fromResult(result);
+            console.log('PA Result:', paResult);
+            resolve({ paResult, recognizedText: result.text });
+          } else {
+            reject(new Error(`認識失敗: ${SpeechSDK.ResultReason[result.reason]} / ${result.errorDetails || ''}`));
+          }
+          recognizer.close();
+        }, err => {
+          console.error('SDK Error:', err);
+          reject(new Error(err));
+          recognizer.close();
+        });
+      });
+    });
+  }
+
+  let allResults = [];
+
+  async function startScoring() {
+    const apiKey = document.getElementById('apiKey').value.trim();
+    const region = document.getElementById('region').value.trim();
+    const refText = document.getElementById('refText').value.trim();
+
+    allResults = [];
+    document.getElementById('resultsList').innerHTML = '';
+    document.getElementById('results-section').style.display = 'none';
+    document.getElementById('startBtn').disabled = true;
+
+    const progressWrap = document.getElementById('progressWrap');
+    const progressBar = document.getElementById('progressBar');
+    const progressLabel = document.getElementById('progressLabel');
+    progressWrap.style.display = 'block';
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const statusEl = document.getElementById(`status-${i}`);
+      statusEl.textContent = '変換中...';
+      statusEl.style.color = '#d69e2e';
+
+      progressBar.style.width = `${(i / files.length) * 100}%`;
+      progressLabel.textContent = `${i + 1} / ${files.length} 件処理中：${file.name}`;
+
+      try {
+        // Step1: まず全体をWAVに変換して文字起こし→開始時刻を検出
+        statusEl.textContent = '開始位置検出中...';
+        statusEl.style.color = '#805ad5';
+        const fullWav = await toWav(file, 0);
+        const startSec = await detectStartOffset(fullWav, refText, apiKey, region);
+
+        // Step2: 開始時刻から切り出して採点
+        statusEl.textContent = '採点中...';
+        statusEl.style.color = '#d69e2e';
+        const trimmedWav = startSec > 0.5 ? await toWav(file, startSec) : fullWav;
+        const { paResult, recognizedText } = await scoreSingle(trimmedWav, refText, apiKey, region);
+        statusEl.textContent = '完了 ✓';
+        statusEl.style.color = '#38a169';
+        allResults.push({ name: file.name, paResult, recognizedText, startSec, error: null });
+        renderResult(file.name, paResult, recognizedText, null);
+      } catch (err) {
+        statusEl.textContent = 'エラー';
+        statusEl.style.color = '#e53e3e';
+        allResults.push({ name: file.name, paResult: null, recognizedText: null, error: err.message });
+        renderResult(file.name, null, null, err.message);
+      }
+    }
+
+    progressBar.style.width = '100%';
+    progressLabel.textContent = `✅ 全${files.length}件の採点が完了しました`;
+    document.getElementById('results-section').style.display = 'block';
+    document.getElementById('startBtn').disabled = false;
+  }
+
+  // 認識テキストを正解テキストの開始・終了位置で切り取る
+  function trimRecognizedText(recognized, refText) {
+    if (!recognized || !refText) return recognized;
+    const cleanRef = refText.replace(/\s/g, '');
+
+    // 開始位置：最初の10文字から2文字の順に検索
+    let startIdx = 0;
+    for (let len = 10; len >= 2; len--) {
+      const search = cleanRef.substring(0, len);
+      const idx = recognized.indexOf(search);
+      if (idx >= 0) { startIdx = idx; break; }
+    }
+
+    // 終了位置：最後の10文字から2文字の順に検索
+    let endIdx = recognized.length;
+    for (let len = 10; len >= 2; len--) {
+      const search = cleanRef.substring(cleanRef.length - len);
+      const idx = recognized.lastIndexOf(search);
+      if (idx >= 0) { endIdx = idx + search.length; break; }
+    }
+
+    return recognized.substring(startIdx, endIdx);
+  }
+
+  function renderResult(name, paResult, recognizedText, error) {
+    const refText = document.getElementById('refText').value.trim();
+    const list = document.getElementById('resultsList');
+    document.getElementById('results-section').style.display = 'block';
+
+    const div = document.createElement('div');
+
+    if (error) {
+      div.className = 'result-card error';
+      div.innerHTML = `
+        <div class="result-top">
+          <span class="result-name">📄 ${name}</span>
+        </div>
+        <p class="error-msg">⚠️ エラー：${error}</p>
+      `;
+      list.appendChild(div);
+      return;
+    }
+
+    if (!paResult) {
+      div.className = 'result-card error';
+      div.innerHTML = `<div class="result-top"><span class="result-name">📄 ${name}</span></div><p class="error-msg">採点結果が取得できませんでした。</p>`;
+      list.appendChild(div);
+      return;
+    }
+
+    const acc = Math.round(paResult.accuracyScore ?? 0);
+    const flu = Math.round(paResult.fluencyScore ?? 0);
+    const com = Math.round(paResult.completenessScore ?? 0);
+    const prosody = paResult.prosodyScore != null ? Math.round(paResult.prosodyScore) : null;
+
+    // 総合点：流暢さを含めて計算
+    const scoreArr = [acc, flu, com];
+    if (prosody != null) scoreArr.push(prosody);
+    const pro = Math.round(scoreArr.reduce((a,b) => a+b, 0) / scoreArr.length);
+
+    // SDKの単語データを取得（複数のパスを試みる）
+    let words = [];
+    try {
+      const detail = paResult.detailResult;
+      if (detail?.Words) words = detail.Words;
+      else if (detail?.words) words = detail.words;
+      else if (Array.isArray(detail)) words = detail;
+      console.log('Words data:', JSON.stringify(words.slice(0, 3)));
+    } catch(e) { console.log('Words error:', e); }
+
+    // 単語ごとにHTMLを生成（全単語を正解テキスト順に表示）
+    function getWordScore(w) {
+      return w.AccuracyScore ?? w.accuracyScore ?? w.PronunciationAssessment?.AccuracyScore ?? null;
+    }
+    function getWordError(w) {
+      return w.ErrorType ?? w.errorType ?? w.PronunciationAssessment?.ErrorType ?? 'None';
+    }
+    function getWordText(w) {
+      return w.Word ?? w.word ?? '';
+    }
+
+    function wordColor(score, errorType) {
+      if (errorType === 'Omission') return '#fefcbf'; // 黄：読み飛ばし
+      if (errorType === 'Insertion') return '#e9d8fd'; // 紫：余分な挿入
+      if (score === null) return '#e2e8f0';
+      if (score >= 80) return '#c6f6d5'; // 緑：良い
+      if (score >= 60) return '#feebc8'; // オレンジ：やや問題
+      return '#fed7d7'; // 赤：問題あり
+    }
+    function wordTextColor(score, errorType) {
+      if (errorType === 'Omission') return '#7b6c00';
+      if (errorType === 'Insertion') return '#553c9a';
+      if (score === null) return '#4a5568';
+      if (score >= 80) return '#276749';
+      if (score >= 60) return '#7b341e';
+      return '#9b2c2c';
+    }
+
+    const wordTags = words.map(w => {
+      const score = getWordScore(w);
+      const errorType = getWordError(w);
+      const text = getWordText(w);
+      const bg = wordColor(score, errorType);
+      const fg = wordTextColor(score, errorType);
+      const scoreLabel = score !== null ? `<span style="font-size:10px;opacity:0.8">${Math.round(score)}</span>` : '';
+      let prefix = '';
+      if (errorType === 'Omission') prefix = '⬜';
+      else if (errorType === 'Insertion') prefix = '➕';
+      else if (score !== null && score < 60) prefix = '❌';
+      else if (score !== null && score < 80) prefix = '△';
+      return `<span class="word-detail-tag" style="background:${bg};color:${fg}">${prefix}${text}${scoreLabel}</span>`;
+    }).join('');
+
+    const problemWords = words.filter(w => {
+      const s = getWordScore(w);
+      const e = getWordError(w);
+      return e === 'Omission' || e === 'Insertion' || (s !== null && s < 80);
+    });
+
+    const safeId = name.replace(/[^a-zA-Z0-9]/g,'_');
+    div.className = 'result-card';
+    div.innerHTML = `
+      <div class="result-top">
+        <span class="result-name">📄 ${name}</span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="result-score" id="total-${safeId}">${pro}<span>点</span></div>
+          <button class="btn-recalc" onclick="recalcTotal('${safeId}')">再計算</button>
+        </div>
+      </div>
+      ${recognizedText ? `<p style="font-size:13px;color:#718096;margin-bottom:12px;">🎤 認識テキスト：${trimRecognizedText(recognizedText, refText)}</p>` : ''}
+
+      <div class="edit-notice">✏️ 各スコアは講師が修正できます。修正後「再計算」を押すと総合点が更新されます。</div>
+
+      <div class="score-grid">
+        <div class="score-item">
+          <div class="label">発音正確性</div>
+          <div class="value" style="color:#1a4f8a">${acc}</div>
+          <div class="edit-row">
+            <span class="edit-label">修正：</span>
+            <input class="score-input" type="number" min="0" max="100" id="edit-acc-${safeId}" placeholder="${acc}" value="${acc}">
+          </div>
+        </div>
+        <div class="score-item">
+          <div class="label">流暢さ</div>
+          <div class="value" style="color:#38a169">${flu}</div>
+          <div class="edit-row">
+            <span class="edit-label">修正：</span>
+            <input class="score-input" type="number" min="0" max="100" id="edit-flu-${safeId}" placeholder="${flu}" value="${flu}">
+          </div>
+        </div>
+        <div class="score-item">
+          <div class="label">完全性</div>
+          <div class="value" style="color:#d69e2e">${com}</div>
+          <div class="edit-row">
+            <span class="edit-label">修正：</span>
+            <input class="score-input" type="number" min="0" max="100" id="edit-com-${safeId}" placeholder="${com}" value="${com}">
+          </div>
+        </div>
+        ${prosody != null ? `
+        <div class="score-item">
+          <div class="label">韻律・イントネーション</div>
+          <div class="value" style="color:#805ad5">${prosody}</div>
+          <div class="edit-row">
+            <span class="edit-label">修正：</span>
+            <input class="score-input" type="number" min="0" max="100" id="edit-pro-${safeId}" placeholder="${prosody}" value="${prosody}">
+          </div>
+        </div>` : ''}
+      </div>
+
+      <div class="score-bar-wrap">
+        <div class="score-bar-label"><span>発音正確性</span><span id="bar-acc-${safeId}">${acc}</span></div>
+        <div class="score-bar-bg"><div class="score-bar-fill fill-accuracy" id="fill-acc-${safeId}" style="width:${acc}%"></div></div>
+        <div class="score-bar-label"><span>流暢さ</span><span id="bar-flu-${safeId}">${flu}</span></div>
+        <div class="score-bar-bg"><div class="score-bar-fill fill-fluency" id="fill-flu-${safeId}" style="width:${flu}%"></div></div>
+        <div class="score-bar-label"><span>完全性（読み飛ばしなし）</span><span id="bar-com-${safeId}">${com}</span></div>
+        <div class="score-bar-bg"><div class="score-bar-fill fill-completeness" id="fill-com-${safeId}" style="width:${com}%"></div></div>
+        ${prosody != null ? `
+        <div class="score-bar-label"><span>韻律・イントネーション</span><span id="bar-pro-${safeId}">${prosody}</span></div>
+        <div class="score-bar-bg"><div class="score-bar-fill fill-prosody" id="fill-pro-${safeId}" style="width:${prosody}%"></div></div>` : ''}
+      </div>
+      <div class="word-list">
+        <div class="tab-bar" id="tabs-${safeId}">
+          <button class="tab-btn active" onclick="switchTab(this,'accuracy','${safeId}')">発音正確性</button>
+          <button class="tab-btn" onclick="switchTab(this,'fluency','${safeId}')">流暢さ</button>
+          <button class="tab-btn" onclick="switchTab(this,'completeness','${safeId}')">完全性</button>
+          ${prosody != null ? `<button class="tab-btn" onclick="switchTab(this,'prosody','${safeId}')">韻律・イントネーション</button>` : ''}
+          <button class="tab-btn" onclick="switchTab(this,'all','${safeId}')">全単語</button>
+        </div>
+
+        <!-- 発音正確性タブ -->
+        <div class="tab-content" id="tab-accuracy-${safeId}">
+          ${(() => {
+            const accWords = words.filter(w => { const s = getWordScore(w); const e = getWordError(w); return e !== 'Omission' && e !== 'Insertion' && s !== null && s < 80; });
+            if (accWords.length === 0) return '<p style="color:#38a169;font-weight:600;padding:12px 0">✅ 発音の問題はありませんでした</p>';
+            return `<table class="word-table"><thead><tr><th>語</th><th>発音スコア</th><th>判定</th></tr></thead><tbody>
+              ${accWords.map(w => {
+                const s = getWordScore(w); const t = getWordText(w);
+                const bg = wordColor(s, null); const fg = wordTextColor(s, null);
+                const judge = s < 60 ? '❌ 発音ミス' : '△ 要改善';
+                return `<tr><td><span style="background:${bg};color:${fg};padding:2px 10px;border-radius:99px;font-weight:600">${t}</span></td><td style="text-align:center;font-weight:700;color:${fg}">${Math.round(s)}</td><td>${judge}</td></tr>`;
+              }).join('')}
+            </tbody></table>`;
+          })()}
+        </div>
+
+        <!-- 流暢さタブ -->
+        <div class="tab-content" id="tab-fluency-${safeId}" style="display:none">
+          <p style="font-size:13px;color:#4a5568;margin-bottom:10px;padding:10px;background:#f7faff;border-radius:8px">
+            流暢さスコア：<strong>${flu}</strong>／100　―　区切り位置や読み直しがどれだけ自然かを示します。
+            ${flu >= 80 ? '<br><span style="color:#38a169;font-weight:600">✅ 流暢に読めています</span>' : flu >= 60 ? '<br><span style="color:#d69e2e;font-weight:600">△ 区切りや読み直しにやや改善の余地があります</span>' : '<br><span style="color:#e53e3e;font-weight:600">❌ 区切り位置や読み直しの改善が必要です</span>'}
+          </p>
+        </div>
+
+        <!-- 完全性タブ -->
+        <div class="tab-content" id="tab-completeness-${safeId}" style="display:none">
+          <p style="font-size:13px;color:#4a5568;margin-bottom:10px;padding:10px;background:#f7faff;border-radius:8px">
+            完全性スコア：<strong>${com}</strong>／100　―　テキストの語を読み飛ばさずに読めているかを示します。
+          </p>
+          ${(() => {
+            const omitW = words.filter(w => getWordError(w) === 'Omission');
+            if (omitW.length === 0) return '<p style="color:#38a169;font-weight:600">✅ 読み飛ばしはありませんでした</p>';
+            return `<table class="word-table"><thead><tr><th>読み飛ばした語</th><th>判定</th></tr></thead><tbody>
+              ${omitW.map(w => `<tr><td><span style="background:#fefcbf;color:#7b6c00;padding:2px 10px;border-radius:99px;font-weight:600">${getWordText(w)}</span></td><td>⬜ 読み飛ばし</td></tr>`).join('')}
+            </tbody></table>`;
+          })()}
+        </div>
+
+        <!-- 韻律タブ -->
+        ${prosody != null ? `
+        <div class="tab-content" id="tab-prosody-${safeId}" style="display:none">
+          <p style="font-size:13px;color:#4a5568;padding:10px;background:#f7faff;border-radius:8px">
+            韻律・イントネーションスコア：<strong>${prosody}</strong>／100
+            ${prosody >= 80 ? '<br><span style="color:#38a169;font-weight:600">✅ 全体的に自然なイントネーションで読めています</span>' : prosody >= 60 ? '<br><span style="color:#d69e2e;font-weight:600">△ イントネーションにやや改善の余地があります</span>' : '<br><span style="color:#e53e3e;font-weight:600">❌ イントネーションの改善が必要です</span>'}
+          </p>
+        </div>` : ''}
+
+        <!-- 全単語タブ -->
+        <div class="tab-content" id="tab-all-${safeId}" style="display:none">
+          <p style="margin-bottom:8px;font-size:13px">
+            <span style="background:#c6f6d5;padding:1px 8px;border-radius:4px;font-size:12px">緑:良い(80↑)</span>
+            <span style="background:#feebc8;padding:1px 8px;border-radius:4px;font-size:12px;margin-left:4px">橙:要改善(60-79)</span>
+            <span style="background:#fed7d7;padding:1px 8px;border-radius:4px;font-size:12px;margin-left:4px">赤:発音ミス(60↓)</span>
+            <span style="background:#fefcbf;padding:1px 8px;border-radius:4px;font-size:12px;margin-left:4px">黄:読み飛ばし</span>
+          </p>
+          <div class="words">${wordTags}</div>
+        </div>
+      </div>
+    `;
+    list.appendChild(div);
+  }
+
+  function exportAllPDF() {
+    if (allResults.length === 0) return;
+
+    const win = window.open('', '_blank');
+    if (!win) {
+      alert('ポップアップがブロックされました。\nアドレスバー右側でポップアップを許可してから再度お試しください。');
+      return;
+    }
+
+    const allHtml = allResults.map(r => buildPDFHtml(r)).join('<div style="page-break-after:always"></div>');
+
+    win.document.write(`<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><title>音読評価結果 一括</title>
+<style>
+  @media print {
+    .no-print { display: none; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+  body { margin: 0; padding: 0; font-family: 'Hiragino Kaku Gothic ProN','Meiryo',sans-serif; }
+  .print-btn {
+    position: fixed; top: 16px; right: 16px;
+    background: #1a4f8a; color: white;
+    border: none; border-radius: 8px;
+    padding: 10px 24px; font-size: 15px; font-weight: 700;
+    cursor: pointer; z-index: 9999; font-family: inherit;
+  }
+</style>
+</head><body>
+<button class="print-btn no-print" onclick="window.print()">🖨️ 印刷／PDF保存</button>
+${allHtml}
+</body></html>`);
+    win.document.close();
+  }
+
+  function buildPDFHtml(r) {
+    const date = new Date().toLocaleDateString('ja-JP');
+    const studentName = r.name.replace(/\.[^/.]+$/, ''); // 拡張子除去
+
+    if (r.error) {
+      return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
+        <title>${studentName} 音読評価</title></head><body>
+        <h1>${studentName} 音読評価結果</h1><p>エラー：${r.error}</p></body></html>`;
+    }
+
+    const pa = r.paResult;
+    const acc = r.editedScores?.acc ?? Math.round(pa?.accuracyScore ?? 0);
+    const flu = Math.round(pa?.fluencyScore ?? 0);
+    const com = r.editedScores?.com ?? Math.round(pa?.completenessScore ?? 0);
+    const prosody = r.editedScores?.pro ?? (pa?.prosodyScore != null ? Math.round(pa.prosodyScore) : null);
+
+    // 総合点：流暢さを含めて計算
+    const scoreArr = [acc, flu, com];
+    if (prosody != null) scoreArr.push(prosody);
+    const pro = r.editedScores?.total ?? Math.round(scoreArr.reduce((a,b) => a+b, 0) / scoreArr.length);
+
+    // 単語データ
+    let words = [];
+    try {
+      const detail = pa.detailResult;
+      if (detail?.Words) words = detail.Words;
+      else if (detail?.words) words = detail.words;
+    } catch(e) {}
+
+    function getS(w) { return w.AccuracyScore ?? w.accuracyScore ?? null; }
+    function getE(w) { return w.ErrorType ?? w.errorType ?? 'None'; }
+    function getT(w) { return w.Word ?? w.word ?? ''; }
+
+    const accProb = words.filter(w => { const s=getS(w),e=getE(w); return e!=='Omission'&&e!=='Insertion'&&s!==null&&s<80; });
+    const omitW = words.filter(w => getE(w)==='Omission');
+    const insertW = words.filter(w => getE(w)==='Insertion');
+
+    const scoreColor = s => s >= 80 ? '#276749' : s >= 60 ? '#c05621' : '#c53030';
+    const scoreBg = s => s >= 80 ? '#c6f6d5' : s >= 60 ? '#feebc8' : '#fed7d7';
+
+    return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>${studentName} 音読評価</title>
+<style>
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  body { font-family: 'Hiragino Kaku Gothic ProN','Meiryo',sans-serif; color: #1a2533; margin: 0; padding: 0; font-size: 13px; }
+  .page { max-width: 720px; margin: 0 auto; padding: 32px 28px; }
+  .header-bar { background: #1a4f8a; color: white; padding: 16px 24px; border-radius: 8px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; }
+  .header-bar h1 { font-size: 18px; margin: 0; }
+  .header-bar .meta { font-size: 12px; opacity: 0.8; text-align: right; }
+  .section { margin-bottom: 20px; }
+  .section-title { font-size: 14px; font-weight: 700; color: #1a4f8a; border-bottom: 2px solid #e8eef5; padding-bottom: 6px; margin-bottom: 12px; }
+  .score-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+  .score-box { border: 1.5px solid #e8eef5; border-radius: 8px; padding: 10px; text-align: center; }
+  .score-box .label { font-size: 11px; color: #718096; margin-bottom: 4px; }
+  .score-box .val { font-size: 22px; font-weight: 800; color: #1a4f8a; }
+  .total-score { text-align: center; background: #1a4f8a; color: white; border-radius: 8px; padding: 12px; margin-bottom: 16px; }
+  .total-score .label { font-size: 13px; opacity: 0.8; }
+  .total-score .val { font-size: 36px; font-weight: 900; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { background: #edf2f7; padding: 7px 10px; text-align: left; font-weight: 700; border-bottom: 2px solid #cbd5e0; }
+  td { padding: 7px 10px; border-bottom: 1px solid #e8eef5; vertical-align: middle; }
+  .tag { padding: 2px 8px; border-radius: 99px; font-weight: 600; font-size: 12px; }
+  .recog { background: #f7faff; border: 1px solid #bee3f8; border-radius: 6px; padding: 10px; font-size: 12px; color: #2c5282; margin-bottom: 16px; line-height: 1.7; }
+  .comment-box { background: #fffbeb; border: 1px solid #f6e05e; border-radius: 6px; padding: 12px; font-size: 12px; line-height: 1.8; }
+  .footer { margin-top: 24px; font-size: 11px; color: #a0aec0; text-align: center; border-top: 1px solid #e8eef5; padding-top: 12px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header-bar">
+    <h1>🎙️ 音読評価フィードバック</h1>
+    <div class="meta">氏名：${studentName}<br>評価日：${date}</div>
+  </div>
+
+  <div class="total-score">
+    <div class="label">総合点</div>
+    <div class="val">${pro}<span style="font-size:18px">点</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">📊 項目別スコア</div>
+    <div class="score-grid">
+      <div class="score-box"><div class="label">発音正確性</div><div class="val" style="color:${scoreColor(acc)}">${acc}</div></div>
+      <div class="score-box"><div class="label">流暢さ</div><div class="val" style="color:${scoreColor(flu)}">${flu}</div></div>
+      <div class="score-box"><div class="label">完全性</div><div class="val" style="color:${scoreColor(com)}">${com}</div></div>
+      ${prosody != null ? `<div class="score-box"><div class="label">韻律・イントネーション</div><div class="val" style="color:${scoreColor(prosody)}">${prosody}</div></div>` : ''}
+    </div>
+  </div>
+
+  ${r.recognizedText ? `
+  <div class="section">
+    <div class="section-title">🎤 認識されたテキスト</div>
+    <div class="recog">${trimRecognizedText(r.recognizedText, document.getElementById('refText')?.value ?? '')}</div>
+  </div>` : ''}
+
+  ${accProb.length > 0 ? `
+  <div class="section">
+    <div class="section-title">❌ 発音に問題のある語</div>
+    <table>
+      <thead><tr><th>語</th><th>スコア</th><th>判定</th></tr></thead>
+      <tbody>
+        ${accProb.map(w => {
+          const s = getS(w); const t = getT(w);
+          return `<tr>
+            <td><span class="tag" style="background:${scoreBg(s)};color:${scoreColor(s)}">${t}</span></td>
+            <td style="font-weight:700;color:${scoreColor(s)}">${Math.round(s)}</td>
+            <td>${s < 60 ? '❌ 発音ミス' : '△ 要改善'}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>` : `<div class="section"><div class="section-title">発音正確性</div><p style="color:#276749;font-weight:600">✅ 発音の問題はありませんでした</p></div>`}
+
+  ${omitW.length > 0 ? `
+  <div class="section">
+    <div class="section-title">⬜ 読み飛ばした語</div>
+    <table>
+      <thead><tr><th>語</th><th>判定</th></tr></thead>
+      <tbody>
+        ${omitW.map(w => `<tr><td><span class="tag" style="background:#fefcbf;color:#7b6c00">${getT(w)}</span></td><td>読み飛ばし</td></tr>`).join('')}
+      </tbody>
+    </table>
+  </div>` : ''}
+
+  ${insertW.length > 0 ? `
+  <div class="section">
+    <div class="section-title">➕ 余分に読んだ語</div>
+    <table>
+      <thead><tr><th>語</th><th>判定</th></tr></thead>
+      <tbody>
+        ${insertW.map(w => `<tr><td><span class="tag" style="background:#e9d8fd;color:#553c9a">${getT(w)}</span></td><td>余分な語（言い直し等）</td></tr>`).join('')}
+      </tbody>
+    </table>
+  </div>` : ''}
+
+  <div class="section">
+    <div class="section-title">💬 総合コメント</div>
+    <div class="comment-box">
+      ${pro >= 85 ? '全体的に非常によく読めています。発音・流暢さともに高いレベルです。' :
+        pro >= 70 ? '概ねよく読めています。いくつかの語の発音をさらに練習するとより自然になります。' :
+        pro >= 55 ? '基本的な読みはできていますが、発音や読み飛ばしに改善の余地があります。問題のある語を重点的に練習しましょう。' :
+        '発音や読み飛ばしが多く見られます。テキストをゆっくり確認しながら繰り返し練習しましょう。'}
+      ${flu < 70 ? '<br>流暢さのスコアが低めです。不必要な間や詰まりを減らすよう意識しましょう。' : ''}
+      ${com < 80 ? '<br>読み飛ばしが見られます。テキスト全体をしっかり確認しながら読む練習をしましょう。' : ''}
+    </div>
+  </div>
+
+  <div class="footer">音読採点システム（Azure Pronunciation Assessment）　${date}</div>
+</div>
+</body>
+</html>`;
+  }
+
+  function exportCSV() {
+    if (allResults.length === 0) return;
+    const rows = [['ファイル名', '総合点', '発音正確性', '流暢さ', '完全性', '韻律・イントネーション', '認識テキスト', 'エラー']];
+    for (const r of allResults) {
+      if (r.error) {
+        rows.push([r.name, '', '', '', '', '', '', r.error]);
+      } else {
+        const pa = r.paResult;
+        const edited = r.editedScores;
+        rows.push([
+          r.name,
+          edited ? edited.total : Math.round(pa?.pronunciationScore ?? 0),
+          edited ? edited.acc : Math.round(pa?.accuracyScore ?? 0),
+          edited ? edited.flu : Math.round(pa?.fluencyScore ?? 0),
+          edited ? edited.com : Math.round(pa?.completenessScore ?? 0),
+          edited ? (edited.pro ?? 'N/A') : (pa?.prosodyScore != null ? Math.round(pa.prosodyScore) : 'N/A'),
+          r.recognizedText ?? '',
+          edited ? '修正済' : ''
+        ]);
+      }
+    }
+    const csv = '\uFEFF' + rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `音読採点結果_${new Date().toLocaleDateString('ja-JP')}.csv`;
+    a.click();
+  }
+
+  function recalcTotal(safeId) {
+    const acc = parseInt(document.getElementById(`edit-acc-${safeId}`)?.value) || 0;
+    const flu = parseInt(document.getElementById(`edit-flu-${safeId}`)?.value) || 0;
+    const com = parseInt(document.getElementById(`edit-com-${safeId}`)?.value) || 0;
+    const proEl = document.getElementById(`edit-pro-${safeId}`);
+    const hasProsody = !!proEl;
+    const pro = hasProsody ? (parseInt(proEl.value) || 0) : null;
+
+    // 総合点：流暢さを含めて計算
+    const scores = [acc, flu, com];
+    if (hasProsody && pro !== null) scores.push(pro);
+    const total = Math.round(scores.reduce((a,b) => a+b, 0) / scores.length);
+
+    // 表示を更新
+    document.getElementById(`total-${safeId}`).innerHTML = `${total}<span>点</span><span style="font-size:11px;color:#718096;margin-left:6px">（修正済）</span>`;
+
+    // バーを更新
+    ['acc','flu','com'].forEach(key => {
+      const val = key==='acc'?acc:key==='flu'?flu:com;
+      const barEl = document.getElementById(`bar-${key}-${safeId}`);
+      const fillEl = document.getElementById(`fill-${key}-${safeId}`);
+      if(barEl) barEl.textContent = val;
+      if(fillEl) fillEl.style.width = val+'%';
+    });
+    if(hasProsody && pro !== null) {
+      const barEl = document.getElementById(`bar-pro-${safeId}`);
+      const fillEl = document.getElementById(`fill-pro-${safeId}`);
+      if(barEl) barEl.textContent = pro;
+      if(fillEl) fillEl.style.width = pro+'%';
+    }
+
+    // allResultsにも修正スコアを保存
+    const r = allResults.find(r => r.name.replace(/[^a-zA-Z0-9]/g,'_') === safeId);
+    if(r) r.editedScores = { acc, flu, com, pro, total };
+  }
+
+  function switchTab(btn, tabName, id) {
+    // ボタンのアクティブ状態を切り替え
+    const tabBar = btn.closest('.tab-bar');
+    tabBar.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    // コンテンツの表示切り替え
+    const card = btn.closest('.result-card');
+    card.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+    card.querySelector(`#tab-${tabName}-${id}`).style.display = 'block';
+  }
+
+  function resetAll() {
+    files = [];
+    renderFileList();
+    document.getElementById('resultsList').innerHTML = '';
+    document.getElementById('results-section').style.display = 'none';
+    document.getElementById('progressWrap').style.display = 'none';
+    document.getElementById('progressBar').style.width = '0%';
+    document.getElementById('progressLabel').textContent = '';
+    document.getElementById('fileInput').value = '';
+    checkReady();
+  }
+</script>
+</body>
+</html>
